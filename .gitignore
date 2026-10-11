@@ -1,0 +1,7 @@
+node_modules/
+.output/
+.wxt/
+.artifacts/browser-profiles/
+.artifacts/test-profile-*/
+.artifacts/test-extension-*/
+*.log

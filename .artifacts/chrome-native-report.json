@@ -1,0 +1,7 @@
+{
+  "browser": "154.0.8037.98",
+  "manifestHostPermissions": "none",
+  "toolbarAction": true,
+  "activeTabInjection": true,
+  "imageExtraction": true
+}

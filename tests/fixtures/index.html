@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>模块取图 · 验证页面</title>
+    <base href="/assets/" />
+    <style>
+      body {
+        font: 15px/1.8 system-ui;
+        background: #fafbf7;
+        color: #294034;
+        margin: 40px;
+      }
+      h1 {
+        font-weight: 600;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        padding: 24px;
+        background: #eff3eb;
+        border: 1px solid #d9e1d1;
+        border-radius: 16px;
+      }
+      article {
+        padding: 16px;
+        background: white;
+        border-radius: 8px;
+      }
+      img {
+        max-width: 100%;
+        height: 160px;
+        object-fit: contain;
+      }
+      .background {
+        height: 160px;
+        background-image: linear-gradient(#fff0, #fff0), url('background.svg?color=a,b');
+        background-size: contain;
+        background-repeat: no-repeat;
+      }
+      .pseudo::before {
+        content: '';
+        display: block;
+        width: 100px;
+        height: 80px;
+        background-image: url('pseudo.svg');
+      }
+      .hidden {
+        display: none;
+      }
+      #empty {
+        padding: 32px;
+        margin-top: 20px;
+        border: 1px dashed #aab8a2;
+      }
+      button {
+        padding: 12px;
+        margin: 12px 0;
+      }
+      #lazy {
+        background: #e4ecdd;
+        padding: 20px;
+      }
+      #boundaries {
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>一个模块，一组图片。</h1>
+    <p>受控测试页面：普通图片、背景图、伪元素、懒加载与异常资源。</p>
+    <img id="outside" src="outside.svg" alt="模块外图片" width="100" height="70" />
+    <section id="module" class="grid">
+      <article id="first">
+        <a id="link" href="/navigated"><img id="first-image" src="green.svg" alt="绿色山丘" /></a>
+        <h3>普通图片</h3>
+      </article>
+      <article>
+        <img src="green.svg" alt="重复引用" />
+        <h3>相同地址去重</h3>
+      </article>
+      <article>
+        <div class="background"></div>
+        <h3>多层背景图片</h3>
+      </article>
+      <article class="pseudo"><h3>伪元素背景</h3></article>
+      <article>
+        <picture
+          ><source media="(min-width: 700px)" srcset="wide.svg" />
+          <img src="small.svg" alt="响应式图片"
+        /></picture>
+      </article>
+      <article><img src="missing.svg" data-src="lazy.svg" alt="懒加载候选" /></article>
+      <article><img src="/missing.png" alt="无法预览的图片" /></article>
+      <article>
+        <img src="signed.svg?size=100&token=abc#one" /><img
+          src="signed.svg?size=200&token=abc#two"
+        />
+      </article>
+      <article class="hidden"><img src="hidden.svg" alt="隐藏轮播图片" /></article>
+    </section>
+    <section id="lazy">
+      <img loading="lazy" src="native-lazy.svg" /><img data-original="original.svg" /><img
+        data-lazy-src="custom-lazy.svg"
+      />
+    </section>
+    <section id="empty">这里没有图片。可用来验证空结果与父子级调整。</section>
+    <section id="unsafe">
+      <img src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E" /><img
+        data-src="javascript:alert(1)"
+        alt="&lt;img src=x onerror=alert(1)&gt;"
+      /><canvas width="30" height="30"></canvas
+      ><svg width="30" height="30"><circle r="8" cx="15" cy="15" /></svg>
+    </section>
+    <section id="boundaries">
+      <iframe src="/frame" title="嵌入区域"></iframe>
+      <div id="shadow-host"></div>
+    </section>
+    <button
+      id="load-more"
+      onclick="document.querySelector('#empty').innerHTML = '<img src=added.svg>'"
+    >
+      模拟加载更多
+    </button>
+    <button id="remove-module" onclick="document.querySelector('#module')?.remove()">
+      移除模块
+    </button>
+    <script>
+      document.querySelector('#shadow-host').attachShadow({ mode: 'open' }).innerHTML =
+        '<img src="shadow.svg">';
+      window.pageClicks = 0;
+      document.addEventListener('click', () => window.pageClicks++);
+    </script>
+  </body>
+</html>
