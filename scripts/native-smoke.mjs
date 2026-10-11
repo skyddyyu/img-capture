@@ -54,6 +54,10 @@ try {
   const rect = await page.locator('#first-image').boundingBox();
   await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
   await page.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  await page
+    .getByRole('region', { name: '范围选取工具条' })
+    .getByRole('button', { name: '提取', exact: true })
+    .click();
   await panel.locator('.image-card').waitFor();
   const state = await worker.evaluate(
     async (id) => (await chrome.storage.session.get(`tab:${id}`))[`tab:${id}`],

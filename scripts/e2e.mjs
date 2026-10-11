@@ -7,6 +7,7 @@ import { startFixtureServer } from './fixture-server.mjs';
 const root = path.resolve(import.meta.dirname, '..');
 const artifacts = path.join(root, '.artifacts');
 const target = process.env.E2E_TARGET === 'edge' ? 'edge' : 'chrome';
+const reportName = `${target}${process.env.E2E_FILTER ? '-filtered' : ''}-e2e-report.json`;
 const extension = path.join(artifacts, `test-extension-${target}`);
 await fs.mkdir(artifacts, { recursive: true });
 await fs.cp(path.join(root, `.output/${target}-mv3`), extension, { recursive: true });
@@ -100,6 +101,10 @@ try {
     const y = Math.max(2, rect.y + Math.min(5, rect.height / 2));
     await page.mouse.move(x, y);
     await page.mouse.click(x, y);
+    await page
+      .getByRole('region', { name: '范围选取工具条' })
+      .getByRole('button', { name: '提取', exact: true })
+      .click();
     return waitState((value) => ['ready', 'empty', 'partial'].includes(value?.status));
   };
 
@@ -140,9 +145,11 @@ try {
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
-    await page.screenshot({ path: path.join(artifacts, `${target}-selection.png`) });
     const rect = await page.locator('#first-image').boundingBox();
     await page.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    await page.screenshot({ path: path.join(artifacts, `${target}-selection.png`) });
+    assert.equal((await state()).status, 'selecting');
+    await page.keyboard.press('Enter');
     const current = await waitState((value) => value?.status === 'ready');
     assert.equal(current.result.moduleSummary, 'section#module.grid');
     assert.equal(current.result.resources.length, 10);
@@ -446,10 +453,62 @@ try {
     await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
     const toolbar = page.getByRole('region', { name: '范围选取工具条' });
     await toolbar.getByText('图片区域', { exact: false }).waitFor();
+    assert.equal(
+      await toolbar.getByRole('button', { name: '提取', exact: true }).isVisible(),
+      false,
+    );
+    await page.screenshot({ path: path.join(artifacts, `${target}-selection-preview.png`) });
+    await page.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    assert.equal((await state()).status, 'selecting', 'Click must lock without scanning');
+    const lockedPosition = await toolbar.boundingBox();
+    await page.mouse.move(1050, 20);
+    await page.mouse.click(1050, 20);
+    assert.equal(await toolbar.locator('.description').textContent(), '图片区域');
+    const hierarchy = toolbar.getByRole('navigation', { name: '选区层级' });
+    await hierarchy.getByRole('button', { name: '图片列表区域', exact: true }).click();
+    await hierarchy.getByRole('button', { name: '图片区域', exact: true }).click();
+    assert.equal(await hierarchy.locator('[aria-current="true"]').textContent(), '图片区域');
     await toolbar.getByRole('button', { name: '扩大范围', exact: true }).click();
     await toolbar.getByRole('button', { name: '缩小范围', exact: true }).click();
     await toolbar.getByRole('button', { name: '扩大范围', exact: true }).click();
-    await toolbar.getByRole('button', { name: '扩大范围', exact: true }).click();
+    assert.deepEqual(
+      await toolbar.boundingBox(),
+      lockedPosition,
+      'Scope changes must keep toolbar anchored',
+    );
+    await page.evaluate(() => scrollBy(0, 120));
+    await page.waitForFunction(() => scrollY >= 120);
+    assert.deepEqual(
+      await toolbar.boundingBox(),
+      lockedPosition,
+      'Scrolling must keep toolbar anchored',
+    );
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.waitForFunction(() => {
+      const toolbar = document
+        .querySelector('[style*="2147483647"]')
+        ?.shadowRoot?.querySelector('.label');
+      const bounds = toolbar?.getBoundingClientRect();
+      return (
+        bounds &&
+        bounds.left >= 8 &&
+        bounds.right <= innerWidth - 8 &&
+        bounds.bottom <= innerHeight - 8
+      );
+    });
+    await page.screenshot({ path: path.join(artifacts, `${target}-selection-narrow.png`) });
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await toolbar.getByRole('button', { name: '重新选取', exact: true }).click();
+    assert.equal(
+      await toolbar.getByRole('button', { name: '提取', exact: true }).isVisible(),
+      false,
+    );
+    await page.locator('#first-image').scrollIntoViewIfNeeded();
+    const newRect = await page.locator('#first-image').boundingBox();
+    await page.mouse.move(newRect.x + newRect.width / 2, newRect.y + newRect.height / 2);
+    await page.keyboard.press('Enter');
+    await hierarchy.getByRole('button', { name: '内容卡片', exact: true }).click();
+    await page.screenshot({ path: path.join(artifacts, `${target}-selection-locked.png`) });
     await toolbar.getByRole('button', { name: '提取', exact: true }).click();
     const current = await waitState((value) => value?.status === 'ready');
     assert.equal(current.result.moduleSummary, 'article#first');
@@ -457,11 +516,147 @@ try {
     assert.equal(await page.evaluate(() => window.pageClicks), clicks);
     await panel.getByRole('button', { name: '重新选择模块', exact: true }).click();
     await waitState((value) => value?.status === 'selecting');
-    await toolbar.getByRole('button', { name: '取消', exact: true }).click();
+    await page.keyboard.press('Escape');
     assert.equal(
       (await waitState((value) => value?.status === 'ready')).result.taskId,
       current.result.taskId,
     );
+    await panel.getByRole('button', { name: '重新选择模块', exact: true }).click();
+    await waitState((value) => value?.status === 'selecting');
+    await page.locator('#first-image').scrollIntoViewIfNeeded();
+    const fullRect = await page.locator('#first-image').boundingBox();
+    await page.mouse.move(fullRect.x + fullRect.width / 2, fullRect.y + fullRect.height / 2);
+    for (let index = 0; index < 4; index++) await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => {
+      const toolbar = document
+        .querySelector('[style*="2147483647"]')
+        ?.shadowRoot?.querySelector('.label');
+      const bounds = toolbar?.getBoundingClientRect();
+      return (
+        bounds &&
+        Math.abs(bounds.right - (innerWidth - 8)) < 1 &&
+        Math.abs(bounds.bottom - (innerHeight - 8)) < 1
+      );
+    });
+    await toolbar.getByRole('button', { name: '取消', exact: true }).click();
+    await waitState((value) => value?.status === 'ready');
+  });
+  await test('selection recommends image modules, estimates sources and previews boundaries', async () => {
+    const toolbar = page.getByRole('region', { name: '范围选取工具条' });
+    const preview = async (selector) => {
+      if ((await state())?.status === 'selecting') {
+        await page.keyboard.press('Escape');
+        await waitState((value) => value?.status !== 'selecting');
+      }
+      await panel.getByRole('button', { name: /^(选择网页模块|重新选择模块)$/ }).click();
+      await waitState((value) => value?.status === 'selecting');
+      await page.locator(selector).scrollIntoViewIfNeeded();
+      const rect = await page.locator(selector).boundingBox();
+      await page.mouse.move(
+        rect.x + Math.min(10, rect.width / 2),
+        rect.y + Math.min(10, rect.height / 2),
+      );
+    };
+    await page
+      .locator('#first h3')
+      .evaluate((element) => (element.className = 'product-card__title'));
+    await preview('#first h3');
+    await toolbar.locator('.description').getByText('内容卡片', { exact: true }).waitFor();
+    await toolbar.locator('.estimate').getByText('1 个图片元素（预估）', { exact: true }).waitFor();
+    const imageRect = await page.locator('#first-image').boundingBox();
+    await page.mouse.move(imageRect.x + imageRect.width / 2, imageRect.y + imageRect.height / 2);
+    await toolbar.locator('.description').getByText('图片区域', { exact: true }).waitFor();
+    const titleRect = await page.locator('#first h3').boundingBox();
+    await page.mouse.move(titleRect.x + 10, titleRect.y + 10);
+    await toolbar.locator('.description').getByText('内容卡片', { exact: true }).waitFor();
+    await page.keyboard.press('Enter');
+    const hierarchy = toolbar.getByRole('navigation', { name: '选区层级' });
+    assert.equal(
+      await hierarchy.locator('[aria-current="true"]').getAttribute('title'),
+      'article#first',
+    );
+    await page.keyboard.press('ArrowDown');
+    await toolbar
+      .locator('.estimate')
+      .getByText('未发现可提取的图片元素', { exact: true })
+      .waitFor();
+    assert.equal(
+      await hierarchy.locator('[aria-current="true"]').getAttribute('title'),
+      'h3.product-card__title',
+    );
+    await hierarchy.getByRole('button', { name: '内容卡片', exact: true }).click();
+    await toolbar.locator('.estimate').getByText('1 个图片元素（预估）', { exact: true }).waitFor();
+    await page.screenshot({ path: path.join(artifacts, `${target}-selection-recommended.png`) });
+    await toolbar.getByRole('button', { name: '提取', exact: true }).click();
+    const result = await waitState((value) => value?.status === 'ready');
+    assert.equal(result.result.moduleSummary, 'article#first');
+    assert.equal(result.result.resources.length, 1);
+
+    for (const selector of ['.background', '.pseudo', '#first-image']) {
+      await preview(selector);
+      await toolbar
+        .locator('.estimate')
+        .getByText('1 个图片元素（预估）', { exact: true })
+        .waitFor();
+      await page.keyboard.press('Enter');
+      const expected = await page.locator(selector).evaluate((element) => element.localName);
+      assert.ok(
+        (await hierarchy.locator('[aria-current="true"]').getAttribute('title')).startsWith(
+          expected,
+        ),
+      );
+    }
+    await preview('#module');
+    await toolbar
+      .locator('.estimate')
+      .getByText('10 个图片元素（预估）', { exact: true })
+      .waitFor();
+    assert.equal(await toolbar.locator('.boundary').isVisible(), false);
+    await preview('#lazy');
+    await toolbar.locator('.estimate').getByText('3 个图片元素（预估）', { exact: true }).waitFor();
+    await preview('#unsafe');
+    await toolbar
+      .locator('.estimate')
+      .getByText('未发现可提取的图片元素', { exact: true })
+      .waitFor();
+
+    for (const [selector, boundary] of [
+      ['#boundaries iframe', 'iframe'],
+      ['#shadow-host', 'Shadow DOM'],
+      ['#boundaries', 'iframe / Shadow DOM'],
+    ]) {
+      await preview(selector);
+      if (selector === '#boundaries') await page.keyboard.press('ArrowUp');
+      await toolbar
+        .locator('.boundary')
+        .getByText(`含 ${boundary}，内部图片暂不支持提取`, { exact: true })
+        .waitFor();
+      await toolbar
+        .locator('.estimate')
+        .getByText('未发现可提取的图片元素', { exact: true })
+        .waitFor();
+    }
+    await page.keyboard.press('Enter');
+    await page.screenshot({ path: path.join(artifacts, `${target}-selection-boundary.png`) });
+
+    await page.evaluate(() => {
+      const section = document.createElement('section');
+      section.id = 'estimate-large';
+      section.style.cssText = 'padding:32px;margin-top:20px';
+      section.innerHTML = '<span>·</span>'.repeat(2000);
+      document.body.append(section);
+    });
+    await preview('#estimate-large');
+    await toolbar
+      .locator('.estimate')
+      .getByText('尚未发现图片，预估未完成', { exact: true })
+      .waitFor();
+    assert.equal((await state()).status, 'selecting');
+    await page.keyboard.press('Escape');
+    await waitState((value) => value?.status === 'ready');
+    await page.evaluate(() => document.querySelector('#estimate-large').remove());
+    await page.locator('#first h3').evaluate((element) => element.removeAttribute('class'));
   });
   await test('restore survives panel reload and stale task messages cannot overwrite it', async () => {
     const previous = (await state()).result;
@@ -762,7 +957,7 @@ try {
   });
   assert.deepEqual(errors, [], 'Side panel has no uncaught application errors');
   await fs.writeFile(
-    path.join(artifacts, `${target}-e2e-report.json`),
+    path.join(artifacts, reportName),
     JSON.stringify(
       {
         browser: context.browser()?.version(),
@@ -779,7 +974,7 @@ try {
   console.log(`Completed ${passed.length} browser checks (${target}).`);
 } catch (error) {
   await fs.writeFile(
-    path.join(artifacts, `${target}-e2e-report.json`),
+    path.join(artifacts, reportName),
     JSON.stringify(
       { passed, errors, performance: performanceReport, failure: String(error) },
       null,

@@ -1,0 +1,11 @@
+{
+  "browser": "155.0.4283.45",
+  "passed": [
+    "selection, ancestor navigation, click interception, scope and dedup",
+    "selection toolbar adjusts scope, extracts and cancels without webpage clicks",
+    "selection recommends image modules, estimates sources and previews boundaries"
+  ],
+  "errors": [],
+  "fixtureHostPermission": "none; real toolbar action via CDP",
+  "timestamp": "2026-10-11T03:43:08.629Z"
+}

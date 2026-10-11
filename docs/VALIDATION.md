@@ -2,6 +2,17 @@
 
 验证日期：2026-10-11（Asia/Shanghai）。软件版本：0.1.0，适合本地安装试用，尚未上架商店。
 
+## 本轮区域选择优化
+
+- 单击或 Enter 锁定预览区域，确认后才开始提取；锁定后移动及点击网页不会改变选区或触发网页操作。
+- 层级路径可在祖先和最初命中的子级间切换，扩大、缩小、重新选取及 Esc / 工具条取消均已验证。
+- 悬停仅展示简短标签；锁定后的工具条在范围调整和滚动时保持锚点，320 × 480 窗口内可操作，整页选区在空间不足时停靠视口边缘。
+- 增加附近图片模块推荐；验证商品标题 class 不会被误当作模块，推荐后转向图片可恢复精确选取，并可从层级路径返回原始文字元素。
+- 预估覆盖普通图片、背景、伪元素、懒加载和隐藏图片，拒绝不支持的 URL；读取边界在选取时提示；超过 1,000 个元素或约 120 ms 不误报无图。预估数与最终按地址去重的数量明确区分。
+- TypeScript、修改代码的 Prettier 检查、20 项单元测试、Chrome / Edge 生产构建通过。上轮 Chrome 完整端到端 28 组通过；本轮最终代码的选区专项在 Chrome / Edge 各 3 组通过。
+- 专项报告为 `.artifacts/*-filtered-e2e-report.json`，与完整回归报告分开保存。新增截图为 `.artifacts/*-selection-preview.png`、`*-selection-locked.png` 和 `*-selection-narrow.png`。
+- 模块推荐及数量预估截图为 `.artifacts/*-selection-recommended.png`；嵌入区域提示截图为 `.artifacts/*-selection-boundary.png`。
+
 ## 环境
 
 - Windows 10.0.26300，Intel Core i7-11800H，16 逻辑处理器。
